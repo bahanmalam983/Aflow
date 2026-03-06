@@ -694,3 +694,90 @@ def cmd_register_guide(state: AppState, args: argparse.Namespace) -> None:
 
 # ---------------------------------------------------------------------------
 # CLI: send-tip (simulated)
+# ---------------------------------------------------------------------------
+
+
+def cmd_send_tip(state: AppState, args: argparse.Namespace) -> None:
+    guide_addr = getattr(args, "guide", None)
+    amount_wei = float(getattr(args, "amount_wei", 1e18))
+    from_addr = getattr(args, "from_addr", "0x" + rand_hex(40))
+    if not guide_addr:
+        print("Error: --guide required")
+        return
+    if get_guide(state, guide_addr) is None:
+        print("Error: guide not registered")
+        return
+    if amount_wei <= 0 or amount_wei > MAX_TIP_WEI:
+        print(f"Error: amount must be in (0, {MAX_TIP_WEI}] wei")
+        return
+    fee_wei = (amount_wei * TIP_FEE_BP) / BP_DENOMINATOR
+    to_guide = amount_wei - fee_wei
+    state.tips.append(
+        TipRecord(
+            from_addr=from_addr,
+            to_guide=guide_addr,
+            amount_wei=amount_wei,
+            fee_wei=fee_wei,
+            at_block=state.current_block,
+        )
+    )
+    state.total_tips_wei += amount_wei
+    state.total_tips_fees_wei += fee_wei
+    state.treasury_balance_wei += fee_wei
+    state.current_block += 1
+    print(f"Tip sent: {fmt_eth(amount_wei)} to {truncate(guide_addr)} (fee {fmt_eth(fee_wei)} to treasury)")
+
+
+# ---------------------------------------------------------------------------
+# CLI: stats
+# ---------------------------------------------------------------------------
+
+
+def cmd_stats(state: AppState, args: argparse.Namespace) -> None:
+    active_dests = len(get_active_destinations(state))
+    print(f"Destinations: {len(state.destinations)} total, {active_dests} active")
+    print(f"Itineraries: {len(state.itineraries)} (counter={state.itinerary_counter})")
+    print(f"Reviews: {len(state.reviews)}")
+    print(f"Guides: {len(list_guides(state))}")
+    print(f"Tips: {len(state.tips)}")
+    print(f"Current block: {state.current_block}, season: {state.current_season}")
+    print(f"Treasury: {fmt_eth(state.treasury_balance_wei)}")
+    print(f"Total tips: {fmt_eth(state.total_tips_wei)}, fees: {fmt_eth(state.total_tips_fees_wei)}")
+    print(f"Updated: {state.updated_at}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: export
+# ---------------------------------------------------------------------------
+
+
+def cmd_export(state: AppState, args: argparse.Namespace) -> None:
+    path = getattr(args, "output", None)
+    fmt = getattr(args, "format", "json").lower()
+    if not path:
+        path = "aflow_export.json"
+    out_path = Path(path)
+    if fmt == "json":
+        out_path.write_text(json.dumps(state.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Exported state to {out_path}")
+    else:
+        print("Only format=json supported for export.")
+
+
+# ---------------------------------------------------------------------------
+# CLI: seed
+# ---------------------------------------------------------------------------
+
+
+def cmd_seed(state: AppState, args: argparse.Namespace) -> None:
+    seed_initial_destinations(state)
+    print("Seeded initial destinations. Run list-destinations to see them.")
+
+
+# ---------------------------------------------------------------------------
+# CLI: advance-blocks / advance-season
+# ---------------------------------------------------------------------------
+
+
+def cmd_advance_blocks(state: AppState, args: argparse.Namespace) -> None:
+    n = int(getattr(args, "blocks", 1))
