@@ -520,3 +520,90 @@ def seed_initial_destinations(state: AppState) -> None:
 # CLI: list-destinations
 # ---------------------------------------------------------------------------
 
+
+def cmd_list_destinations(state: AppState, args: argparse.Namespace) -> None:
+    region = getattr(args, "region", None)
+    active_only = getattr(args, "active_only", True)
+    limit = getattr(args, "limit", 50)
+    dests = state.destinations
+    if active_only:
+        dests = [d for d in dests if d.active]
+    if region is not None:
+        dests = [d for d in dests if d.region_code == region]
+    dests = dests[:limit]
+    if not dests:
+        print("No destinations found.")
+        return
+    print(f"Destinations ({len(dests)}):")
+    for d in dests:
+        reg = region_name(d.region_code)
+        status = "active" if d.active else "retired"
+        print(f"  {truncate(d.dest_id, 12, 8)}  region={d.region_code} ({reg})  {d.name}  [{status}]")
+
+
+# ---------------------------------------------------------------------------
+# CLI: add-destination
+# ---------------------------------------------------------------------------
+
+
+def cmd_add_destination(state: AppState, args: argparse.Namespace) -> None:
+    name = getattr(args, "name", None)
+    region = getattr(args, "region", 0)
+    if not name:
+        print("Error: --name required")
+        return
+    if len(state.destinations) >= MAX_DESTINATIONS:
+        print(f"Error: max destinations ({MAX_DESTINATIONS}) reached")
+        return
+    if region > MAX_REGION_CODE:
+        print(f"Error: region must be 0..{MAX_REGION_CODE}")
+        return
+    dest_id = dest_id_from_name(name)
+    if get_destination_by_id(state, dest_id):
+        print("Error: destination with same id already exists")
+        return
+    state.destinations.append(
+        Destination(
+            dest_id=dest_id,
+            region_code=region,
+            name=name,
+            name_hash=bytes32_style(name + str(state.current_block)),
+            listed_at_block=state.current_block,
+            active=True,
+        )
+    )
+    state.current_block += 1
+    print(f"Added destination: {name} (id={truncate(dest_id, 12, 8)}, region={region})")
+
+
+# ---------------------------------------------------------------------------
+# CLI: create-itinerary
+# ---------------------------------------------------------------------------
+
+
+def cmd_create_itinerary(state: AppState, args: argparse.Namespace) -> None:
+    dest_names = getattr(args, "dests", []) or getattr(args, "destinations", [])
+    days = getattr(args, "days", 7)
+    creator = getattr(args, "creator", "0x" + rand_hex(40))
+    if not dest_names:
+        print("Error: at least one destination required (--dests or --destinations)")
+        return
+    if len(dest_names) > MAX_ITINERARY_STOPS:
+        print(f"Error: max {MAX_ITINERARY_STOPS} stops")
+        return
+    if days < MIN_ITINERARY_DAYS or days > MAX_ITINERARY_DAYS:
+        print(f"Error: days must be {MIN_ITINERARY_DAYS}..{MAX_ITINERARY_DAYS}")
+        return
+    dest_ids = [dest_id_from_name(n) for n in dest_names]
+    state.itinerary_counter += 1
+    it = Itinerary(
+        itinerary_id=state.itinerary_counter,
+        dest_ids=dest_ids,
+        duration_days=days,
+        creator=creator,
+        created_at_block=state.current_block,
+    )
+    state.itineraries.append(it)
+    state.current_block += 1
+    print(f"Created itinerary {it.itinerary_id}: {len(dest_ids)} stops, {days} days, creator={truncate(creator)}")
+
