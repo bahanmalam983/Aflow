@@ -259,3 +259,90 @@ class TipRecord:
     fee_wei: float
     at_block: int
     created_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "TipRecord":
+        return cls(
+            from_addr=d["from_addr"],
+            to_guide=d["to_guide"],
+            amount_wei=float(d["amount_wei"]),
+            fee_wei=float(d["fee_wei"]),
+            at_block=int(d["at_block"]),
+            created_at=d.get("created_at", now_iso()),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Application state
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppState:
+    destinations: List[Destination] = field(default_factory=list)
+    itineraries: List[Itinerary] = field(default_factory=list)
+    reviews: List[ReviewRecord] = field(default_factory=list)
+    guides: List[Guide] = field(default_factory=list)
+    tips: List[TipRecord] = field(default_factory=list)
+    current_block: int = 0
+    current_season: int = 0
+    treasury_balance_wei: float = 0.0
+    total_tips_wei: float = 0.0
+    total_tips_fees_wei: float = 0.0
+    itinerary_counter: int = 0
+    last_review_block_by_traveler: Dict[str, int] = field(default_factory=dict)
+    review_count_by_dest_traveler: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    updated_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "destinations": [d.to_dict() for d in self.destinations],
+            "itineraries": [i.to_dict() for i in self.itineraries],
+            "reviews": [r.to_dict() for r in self.reviews],
+            "guides": [g.to_dict() for g in self.guides],
+            "tips": [t.to_dict() for t in self.tips],
+            "current_block": self.current_block,
+            "current_season": self.current_season,
+            "treasury_balance_wei": self.treasury_balance_wei,
+            "total_tips_wei": self.total_tips_wei,
+            "total_tips_fees_wei": self.total_tips_fees_wei,
+            "itinerary_counter": self.itinerary_counter,
+            "last_review_block_by_traveler": self.last_review_block_by_traveler,
+            "review_count_by_dest_traveler": self._serialize_review_counts(),
+            "updated_at": self.updated_at,
+        }
+
+    def _serialize_review_counts(self) -> Dict[str, Dict[str, int]]:
+        out: Dict[str, Dict[str, int]] = {}
+        for dest_key, traveler_counts in self.review_count_by_dest_traveler.items():
+            out[dest_key] = dict(traveler_counts)
+        return out
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "AppState":
+        dests = [Destination.from_dict(x) for x in d.get("destinations", [])]
+        itins = [Itinerary.from_dict(x) for x in d.get("itineraries", [])]
+        revs = [ReviewRecord.from_dict(x) for x in d.get("reviews", [])]
+        guids = [Guide.from_dict(x) for x in d.get("guides", [])]
+        tip_recs = [TipRecord.from_dict(x) for x in d.get("tips", [])]
+        rc: Dict[str, Dict[str, int]] = {}
+        for k, v in d.get("review_count_by_dest_traveler", {}).items():
+            rc[k] = {k2: int(v2) for k2, v2 in v.items()}
+        return cls(
+            destinations=dests,
+            itineraries=itins,
+            reviews=revs,
+            guides=guids,
+            tips=tip_recs,
+            current_block=int(d.get("current_block", 0)),
+            current_season=int(d.get("current_season", 0)),
+            treasury_balance_wei=float(d.get("treasury_balance_wei", 0)),
+            total_tips_wei=float(d.get("total_tips_wei", 0)),
+            total_tips_fees_wei=float(d.get("total_tips_fees_wei", 0)),
+            itinerary_counter=int(d.get("itinerary_counter", 0)),
+            last_review_block_by_traveler=dict(d.get("last_review_block_by_traveler", {})),
+            review_count_by_dest_traveler=rc,
+            updated_at=d.get("updated_at", now_iso()),
