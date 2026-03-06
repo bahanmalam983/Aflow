@@ -781,3 +781,90 @@ def cmd_seed(state: AppState, args: argparse.Namespace) -> None:
 
 def cmd_advance_blocks(state: AppState, args: argparse.Namespace) -> None:
     n = int(getattr(args, "blocks", 1))
+    state.current_block += n
+    new_season = state.current_block // SEASON_BLOCKS
+    if new_season > state.current_season:
+        state.current_season = new_season
+    print(f"Advanced {n} blocks. Current block={state.current_block}, season={state.current_season}")
+
+
+def cmd_advance_season(state: AppState, args: argparse.Namespace) -> None:
+    state.current_season += 1
+    print(f"Season advanced to {state.current_season}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: top-destinations (by rating)
+# ---------------------------------------------------------------------------
+
+
+def cmd_top_destinations(state: AppState, args: argparse.Namespace) -> None:
+    limit = int(getattr(args, "limit", 10))
+    dest_ratings: List[Tuple[str, float, int]] = []
+    seen: set = set()
+    for d in get_active_destinations(state):
+        if d.dest_id in seen:
+            continue
+        seen.add(d.dest_id)
+        avg, count = average_rating_for_dest(state, d.dest_id)
+        if count > 0:
+            dest_ratings.append((d.dest_id, avg, count))
+    dest_ratings.sort(key=lambda x: (x[1], x[2]), reverse=True)
+    dest_ratings = dest_ratings[:limit]
+    if not dest_ratings:
+        print("No rated destinations yet.")
+        return
+    print("Top destinations by average rating:")
+    for i, (dest_id, avg, count) in enumerate(dest_ratings, 1):
+        dest = get_destination_by_id(state, dest_id)
+        name = dest.name if dest else truncate(dest_id)
+        print(f"  {i}. {name}  avg={avg:.2f}  reviews={count}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: list-reviews
+# ---------------------------------------------------------------------------
+
+
+def cmd_list_reviews(state: AppState, args: argparse.Namespace) -> None:
+    dest_id = getattr(args, "dest_id", None)
+    traveler = getattr(args, "traveler", None)
+    limit = int(getattr(args, "limit", 30))
+    revs = state.reviews
+    if dest_id:
+        revs = [r for r in revs if r.dest_id == dest_id]
+    if traveler:
+        revs = [r for r in revs if r.traveler == traveler]
+    revs = revs[-limit:] if len(revs) > limit else revs
+    if not revs:
+        print("No reviews found.")
+        return
+    print(f"Reviews ({len(revs)}):")
+    for r in revs:
+        dest = get_destination_by_id(state, r.dest_id)
+        name = dest.name if dest else truncate(r.dest_id)
+        print(f"  {truncate(r.dest_id)}  {name}  rating={r.rating}  by {truncate(r.traveler)}  block={r.at_block}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: show-destination
+# ---------------------------------------------------------------------------
+
+
+def cmd_show_destination(state: AppState, args: argparse.Namespace) -> None:
+    dest_id = getattr(args, "dest_id", None) or (dest_id_from_name(getattr(args, "name", "")) if getattr(args, "name", None) else None)
+    if not dest_id:
+        print("Error: --dest_id or --name required")
+        return
+    dest = get_destination_by_id(state, dest_id)
+    if not dest:
+        print("Destination not found.")
+        return
+    print(f"Destination: {dest.name}")
+    print(f"  id: {dest.dest_id}")
+    print(f"  region: {dest.region_code} ({region_name(dest.region_code)})")
+    print(f"  name_hash: {truncate(dest.name_hash, 14, 10)}")
+    print(f"  listed_at_block: {dest.listed_at_block}")
+    print(f"  active: {dest.active}")
+    avg, count = average_rating_for_dest(state, dest_id)
+    print(f"  reviews: {count}, average rating: {avg:.2f}" if count else "  reviews: 0")
