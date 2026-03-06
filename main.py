@@ -955,3 +955,81 @@ def main() -> int:
     p_tip.add_argument("--amount-wei", type=float, default=1e18)
     p_tip.add_argument("--from-addr", type=str, default="0x" + rand_hex(40))
 
+    # stats
+    sub.add_parser("stats", help="Show stats")
+
+    # export
+    p_exp = sub.add_parser("export", help="Export state to JSON")
+    p_exp.add_argument("--output", "-o", type=str, default=None)
+    p_exp.add_argument("--format", type=str, default="json")
+
+    # seed
+    sub.add_parser("seed", help="Seed initial destinations")
+
+    # advance-blocks
+    p_adv = sub.add_parser("advance-blocks", help="Advance current block")
+    p_adv.add_argument("--blocks", type=int, default=1)
+
+    # advance-season
+    sub.add_parser("advance-season", help="Advance season")
+
+    # top-destinations
+    p_top = sub.add_parser("top-destinations", help="Top destinations by rating")
+    p_top.add_argument("--limit", type=int, default=10)
+
+    # show-itinerary
+    p_show_it = sub.add_parser("show-itinerary", help="Show itinerary by id")
+    p_show_it.add_argument("--id", type=int, required=True)
+
+    # list-reviews
+    p_list_r = sub.add_parser("list-reviews", help="List reviews")
+    p_list_r.add_argument("--dest-id", type=str, default=None)
+    p_list_r.add_argument("--traveler", type=str, default=None)
+    p_list_r.add_argument("--limit", type=int, default=30)
+
+    # show-destination
+    p_show_d = sub.add_parser("show-destination", help="Show destination by id or name")
+    p_show_d.add_argument("--dest-id", type=str, default=None)
+    p_show_d.add_argument("--name", type=str, default=None)
+
+    # regions
+    sub.add_parser("regions", help="List region codes and destination counts")
+
+    args = parser.parse_args()
+    state_path = args.state
+    state = load_state(state_path)
+
+    handlers = {
+        "list-destinations": cmd_list_destinations,
+        "add-destination": cmd_add_destination,
+        "create-itinerary": cmd_create_itinerary,
+        "post-review": cmd_post_review,
+        "list-guides": cmd_list_guides,
+        "register-guide": cmd_register_guide,
+        "send-tip": cmd_send_tip,
+        "stats": cmd_stats,
+        "export": cmd_export,
+        "seed": cmd_seed,
+        "advance-blocks": cmd_advance_blocks,
+        "advance-season": cmd_advance_season,
+        "top-destinations": cmd_top_destinations,
+        "show-itinerary": cmd_show_itinerary,
+        "list-reviews": cmd_list_reviews,
+        "show-destination": cmd_show_destination,
+        "regions": cmd_regions,
+    }
+
+    cmd = args.command
+    if not cmd:
+        parser.print_help()
+        return 0
+    if cmd not in handlers:
+        print(f"Unknown command: {cmd}")
+        return 1
+    handlers[cmd](state, args)
+    save_state(state, state_path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
