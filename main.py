@@ -172,3 +172,90 @@ class Destination:
         )
 
 
+@dataclass
+class Itinerary:
+    itinerary_id: int
+    dest_ids: List[str]
+    duration_days: int
+    creator: str
+    created_at_block: int
+    created_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "itinerary_id": self.itinerary_id,
+            "dest_ids": self.dest_ids,
+            "duration_days": self.duration_days,
+            "creator": self.creator,
+            "created_at_block": self.created_at_block,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Itinerary":
+        return cls(
+            itinerary_id=int(d["itinerary_id"]),
+            dest_ids=list(d["dest_ids"]),
+            duration_days=int(d["duration_days"]),
+            creator=d["creator"],
+            created_at_block=int(d["created_at_block"]),
+            created_at=d.get("created_at", now_iso()),
+        )
+
+
+@dataclass
+class ReviewRecord:
+    dest_id: str
+    traveler: str
+    rating: int
+    review_hash: str
+    review_text: str
+    at_block: int
+    created_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ReviewRecord":
+        return cls(
+            dest_id=d["dest_id"],
+            traveler=d["traveler"],
+            rating=int(d["rating"]),
+            review_hash=d["review_hash"],
+            review_text=d.get("review_text", ""),
+            at_block=int(d["at_block"]),
+            created_at=d.get("created_at", now_iso()),
+        )
+
+
+@dataclass
+class Guide:
+    address: str
+    profile_hash: str
+    display_name: str
+    listed: bool = True
+    registered_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Guide":
+        return cls(
+            address=d["address"],
+            profile_hash=d["profile_hash"],
+            display_name=d.get("display_name", truncate(d["address"])),
+            listed=bool(d.get("listed", True)),
+            registered_at=d.get("registered_at", now_iso()),
+        )
+
+
+@dataclass
+class TipRecord:
+    from_addr: str
+    to_guide: str
+    amount_wei: float
+    fee_wei: float
+    at_block: int
+    created_at: str = field(default_factory=now_iso)
