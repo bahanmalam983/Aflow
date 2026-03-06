@@ -868,3 +868,90 @@ def cmd_show_destination(state: AppState, args: argparse.Namespace) -> None:
     print(f"  active: {dest.active}")
     avg, count = average_rating_for_dest(state, dest_id)
     print(f"  reviews: {count}, average rating: {avg:.2f}" if count else "  reviews: 0")
+
+
+# ---------------------------------------------------------------------------
+# CLI: regions
+# ---------------------------------------------------------------------------
+
+
+def cmd_regions(state: AppState, args: argparse.Namespace) -> None:
+    print("Region codes (fusha):")
+    for code, name in sorted(REGION_NAMES.items()):
+        count = len(get_destinations_by_region(state, code))
+        print(f"  {code:2d}  {name}  (destinations: {count})")
+
+
+# ---------------------------------------------------------------------------
+# CLI: show-itinerary
+# ---------------------------------------------------------------------------
+
+
+def cmd_show_itinerary(state: AppState, args: argparse.Namespace) -> None:
+    iid = getattr(args, "id", None)
+    if iid is None:
+        print("Error: --id required")
+        return
+    it = get_itinerary_by_id(state, int(iid))
+    if not it:
+        print("Itinerary not found.")
+        return
+    print(f"Itinerary {it.itinerary_id}: {it.duration_days} days, creator={truncate(it.creator)}")
+    print("Stops:")
+    for j, did in enumerate(it.dest_ids, 1):
+        dest = get_destination_by_id(state, did)
+        name = dest.name if dest else truncate(did)
+        print(f"  {j}. {name}")
+
+
+# ---------------------------------------------------------------------------
+# Main CLI
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog=APP_NAME, description="fusha travel companion — destinations, itineraries, reviews, guides")
+    parser.add_argument("--state", type=Path, default=Path(DEFAULT_STATE_FILE), help="State JSON file path")
+    parser.add_argument("--version", action="version", version=f"{APP_NAME} {APP_VERSION}")
+    sub = parser.add_subparsers(dest="command", help="Commands")
+
+    # list-destinations
+    p_list_d = sub.add_parser("list-destinations", help="List destinations")
+    p_list_d.add_argument("--region", type=int, default=None, help="Filter by region code")
+    p_list_d.add_argument("--no-active-only", dest="active_only", action="store_false", default=True)
+    p_list_d.add_argument("--limit", type=int, default=50)
+
+    # add-destination
+    p_add_d = sub.add_parser("add-destination", help="Add a destination")
+    p_add_d.add_argument("--name", type=str, required=True)
+    p_add_d.add_argument("--region", type=int, default=0)
+
+    # create-itinerary
+    p_it = sub.add_parser("create-itinerary", help="Create an itinerary")
+    p_it.add_argument("--dests", "--destinations", nargs="+", dest="dests", default=[], metavar="NAME")
+    p_it.add_argument("--days", type=int, default=7)
+    p_it.add_argument("--creator", type=str, default="0x" + rand_hex(40))
+
+    # post-review
+    p_rev = sub.add_parser("post-review", help="Post a review")
+    p_rev.add_argument("--dest-id", type=str, default=None)
+    p_rev.add_argument("--dest-name", type=str, default=None)
+    p_rev.add_argument("--traveler", type=str, default="0x" + rand_hex(40))
+    p_rev.add_argument("--rating", type=int, default=4)
+    p_rev.add_argument("--text", type=str, default="Great experience.")
+
+    # list-guides
+    p_guides = sub.add_parser("list-guides", help="List guides")
+    p_guides.add_argument("--limit", type=int, default=50)
+
+    # register-guide
+    p_reg = sub.add_parser("register-guide", help="Register a guide")
+    p_reg.add_argument("--address", type=str, required=True)
+    p_reg.add_argument("--name", type=str, default="")
+
+    # send-tip
+    p_tip = sub.add_parser("send-tip", help="Send tip to a guide (simulated)")
+    p_tip.add_argument("--guide", type=str, required=True)
+    p_tip.add_argument("--amount-wei", type=float, default=1e18)
+    p_tip.add_argument("--from-addr", type=str, default="0x" + rand_hex(40))
+
