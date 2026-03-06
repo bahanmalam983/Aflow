@@ -85,3 +85,90 @@ REGION_NAMES: Dict[int, str] = {
 def now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
+
+def dest_id_hash(name: str, salt: Optional[str] = None) -> str:
+    raw = f"dest_{name}"
+    if salt:
+        raw += f"_{salt}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def bytes32_style(s: str) -> str:
+    h = hashlib.sha256(s.encode()).hexdigest()
+    return f"0x{h[:64]}" if len(h) >= 64 else f"0x{h.zfill(64)}"
+
+
+def fmt_wei(wei: float) -> str:
+    try:
+        return f"{wei:.0f} wei"
+    except Exception:
+        return str(wei)
+
+
+def fmt_eth(wei: float) -> str:
+    try:
+        return f"{wei / 1e18:.6f} ETH"
+    except Exception:
+        return str(wei)
+
+
+def clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def rand_hex(n: int) -> str:
+    alphabet = "0123456789abcdef"
+    return "".join(random.choice(alphabet) for _ in range(n))
+
+
+def truncate(addr: str, head: int = 6, tail: int = 4) -> str:
+    if not addr or len(addr) <= head + tail + 2:
+        return addr
+    if addr.startswith("0x"):
+        return f"{addr[: head + 2]}…{addr[-tail:]}"
+    return f"{addr[:head]}…{addr[-tail:]}"
+
+
+def wrap(text: str, width: int = 78, indent: str = "") -> str:
+    return "\n".join(indent + line for line in textwrap.wrap(text, width))
+
+
+def region_name(code: int) -> str:
+    return REGION_NAMES.get(code, f"Region {code}")
+
+
+def percent_bp(bp: int) -> str:
+    return f"{bp / BP_DENOMINATOR * 100:.2f}%"
+
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Destination:
+    dest_id: str
+    region_code: int
+    name: str
+    name_hash: str
+    listed_at_block: int
+    active: bool = True
+    created_at: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Destination":
+        return cls(
+            dest_id=d["dest_id"],
+            region_code=int(d["region_code"]),
+            name=d["name"],
+            name_hash=d["name_hash"],
+            listed_at_block=int(d["listed_at_block"]),
+            active=bool(d.get("active", True)),
+            created_at=d.get("created_at", now_iso()),
+        )
+
+
