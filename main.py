@@ -433,3 +433,90 @@ def can_post_review(
         return False, f"Cooldown: next review at block {last + REVIEW_COOLDOWN_BLOCKS}"
     counts = state.review_count_by_dest_traveler.get(dest_id, {})
     if counts.get(traveler, 0) >= MAX_REVIEWS_PER_DEST_PER_TRAVELER:
+        return False, "Max reviews per destination reached"
+    return True, ""
+
+
+def get_reviews_for_destination(state: AppState, dest_id: str) -> List[ReviewRecord]:
+    return [r for r in state.reviews if r.dest_id == dest_id]
+
+
+def get_reviews_by_traveler(state: AppState, traveler: str) -> List[ReviewRecord]:
+    return [r for r in state.reviews if r.traveler == traveler]
+
+
+def average_rating_for_dest(state: AppState, dest_id: str) -> Tuple[float, int]:
+    revs = get_reviews_for_destination(state, dest_id)
+    if not revs:
+        return 0.0, 0
+    total = sum(r.rating for r in revs)
+    return total / len(revs), len(revs)
+
+
+# ---------------------------------------------------------------------------
+# Guide helpers
+# ---------------------------------------------------------------------------
+
+
+def get_guide(state: AppState, address: str) -> Optional[Guide]:
+    for g in state.guides:
+        if g.address == address and g.listed:
+            return g
+    return None
+
+
+def list_guides(state: AppState) -> List[Guide]:
+    return [g for g in state.guides if g.listed]
+
+
+# ---------------------------------------------------------------------------
+# Seed initial data (mirror fusha constructor)
+# ---------------------------------------------------------------------------
+
+
+def seed_initial_destinations(state: AppState) -> None:
+    initial = [
+        ("tokyo_shibuya", 0, "Shibuya, Tokyo"),
+        ("kyoto_fushimi", 0, "Fushimi Inari, Kyoto"),
+        ("osaka_dotonbori", 0, "Dotonbori, Osaka"),
+        ("seoul_myeongdong", 1, "Myeongdong, Seoul"),
+        ("bangkok_khaosan", 2, "Khaosan Road, Bangkok"),
+        ("taipei_101", 3, "Taipei 101"),
+        ("hanoi_old_quarter", 4, "Old Quarter, Hanoi"),
+        ("singapore_marina", 5, "Marina Bay, Singapore"),
+        ("hong_kong_kowloon", 6, "Kowloon, Hong Kong"),
+        ("shanghai_bund", 7, "The Bund, Shanghai"),
+        ("bali_ubud", 8, "Ubud, Bali"),
+        ("phuket_patong", 2, "Patong Beach, Phuket"),
+        ("nara_todaiji", 0, "Todai-ji, Nara"),
+        ("hiroshima_miyajima", 0, "Miyajima, Hiroshima"),
+        ("busan_haeundae", 1, "Haeundae Beach, Busan"),
+        ("chiang_mai_old_city", 2, "Old City, Chiang Mai"),
+        ("ho_chi_minh_pham_ngu_lao", 4, "Pham Ngu Lao, Ho Chi Minh City"),
+        ("kuala_lumpur_petronas", 9, "Petronas Towers, Kuala Lumpur"),
+        ("beijing_forbidden", 7, "Forbidden City, Beijing"),
+        ("nagoya_castle", 0, "Nagoya Castle"),
+        ("sapporo_odori", 0, "Odori Park, Sapporo"),
+        ("okinawa_churaumi", 0, "Churaumi Aquarium, Okinawa"),
+    ]
+    for slug, region, name in initial:
+        dest_id = bytes32_style(f"dest_{slug}")
+        if get_destination_by_id(state, dest_id) is not None:
+            continue
+        state.destinations.append(
+            Destination(
+                dest_id=dest_id,
+                region_code=region,
+                name=name,
+                name_hash=bytes32_style(name + str(state.current_block)),
+                listed_at_block=state.current_block,
+                active=True,
+            )
+        )
+        state.current_block += 1
+
+
+# ---------------------------------------------------------------------------
+# CLI: list-destinations
+# ---------------------------------------------------------------------------
+
