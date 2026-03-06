@@ -346,3 +346,90 @@ class AppState:
             last_review_block_by_traveler=dict(d.get("last_review_block_by_traveler", {})),
             review_count_by_dest_traveler=rc,
             updated_at=d.get("updated_at", now_iso()),
+        )
+
+
+# ---------------------------------------------------------------------------
+# State load / save
+# ---------------------------------------------------------------------------
+
+
+def load_state(path: Path) -> AppState:
+    if not path.exists():
+        return AppState()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return AppState.from_dict(data)
+    except Exception as e:
+        print(f"Warning: could not load state from {path}: {e}", file=sys.stderr)
+        return AppState()
+
+
+def save_state(state: AppState, path: Path) -> None:
+    state.updated_at = now_iso()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state.to_dict(), f, indent=2, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# Destinations helpers
+# ---------------------------------------------------------------------------
+
+
+def get_destination_by_id(state: AppState, dest_id: str) -> Optional[Destination]:
+    for d in state.destinations:
+        if d.dest_id == dest_id:
+            return d
+    return None
+
+
+def get_active_destinations(state: AppState) -> List[Destination]:
+    return [d for d in state.destinations if d.active]
+
+
+def get_destinations_by_region(state: AppState, region_code: int) -> List[Destination]:
+    return [d for d in state.destinations if d.region_code == region_code and d.active]
+
+
+def dest_id_from_name(name: str) -> str:
+    safe = name.lower().replace(" ", "_").replace("-", "_")
+    return bytes32_style(f"dest_{safe}")
+
+
+# ---------------------------------------------------------------------------
+# Itinerary helpers
+# ---------------------------------------------------------------------------
+
+
+def get_itinerary_by_id(state: AppState, itinerary_id: int) -> Optional[Itinerary]:
+    for i in state.itineraries:
+        if i.itinerary_id == itinerary_id:
+            return i
+    return None
+
+
+def get_itineraries_by_creator(state: AppState, creator: str) -> List[Itinerary]:
+    return [i for i in state.itineraries if i.creator == creator]
+
+
+# ---------------------------------------------------------------------------
+# Review helpers
+# ---------------------------------------------------------------------------
+
+
+def can_post_review(
+    state: AppState,
+    traveler: str,
+    dest_id: str,
+    current_block: int,
+) -> Tuple[bool, str]:
+    dest = get_destination_by_id(state, dest_id)
+    if not dest or not dest.active:
+        return False, "Destination not found or inactive"
+    last = state.last_review_block_by_traveler.get(traveler, 0)
+    if current_block < last + REVIEW_COOLDOWN_BLOCKS:
+        return False, f"Cooldown: next review at block {last + REVIEW_COOLDOWN_BLOCKS}"
+    counts = state.review_count_by_dest_traveler.get(dest_id, {})
+    if counts.get(traveler, 0) >= MAX_REVIEWS_PER_DEST_PER_TRAVELER:
