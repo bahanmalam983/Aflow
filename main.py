@@ -607,3 +607,90 @@ def cmd_create_itinerary(state: AppState, args: argparse.Namespace) -> None:
     state.current_block += 1
     print(f"Created itinerary {it.itinerary_id}: {len(dest_ids)} stops, {days} days, creator={truncate(creator)}")
 
+
+# ---------------------------------------------------------------------------
+# CLI: post-review
+# ---------------------------------------------------------------------------
+
+
+def cmd_post_review(state: AppState, args: argparse.Namespace) -> None:
+    dest_id = getattr(args, "dest_id", None) or dest_id_from_name(getattr(args, "dest_name", ""))
+    traveler = getattr(args, "traveler", "0x" + rand_hex(40))
+    rating = getattr(args, "rating", 4)
+    text = getattr(args, "text", "Great experience.")
+    if not dest_id:
+        print("Error: --dest_id or --dest_name required")
+        return
+    ok, err = can_post_review(state, traveler, dest_id, state.current_block)
+    if not ok:
+        print(f"Error: {err}")
+        return
+    if rating < RATING_MIN or rating > RATING_MAX:
+        print(f"Error: rating must be {RATING_MIN}..{RATING_MAX}")
+        return
+    review_hash = bytes32_style(text + traveler + str(state.current_block))
+    state.reviews.append(
+        ReviewRecord(
+            dest_id=dest_id,
+            traveler=traveler,
+            rating=rating,
+            review_hash=review_hash,
+            review_text=text,
+            at_block=state.current_block,
+        )
+    )
+    state.last_review_block_by_traveler[traveler] = state.current_block
+    state.review_count_by_dest_traveler.setdefault(dest_id, {})
+    state.review_count_by_dest_traveler[dest_id][traveler] = (
+        state.review_count_by_dest_traveler[dest_id].get(traveler, 0) + 1
+    )
+    state.current_block += 1
+    print(f"Posted review: dest={truncate(dest_id)}, rating={rating}, traveler={truncate(traveler)}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: list-guides
+# ---------------------------------------------------------------------------
+
+
+def cmd_list_guides(state: AppState, args: argparse.Namespace) -> None:
+    guides = list_guides(state)
+    limit = getattr(args, "limit", 50)
+    guides = guides[:limit]
+    if not guides:
+        print("No guides listed.")
+        return
+    print(f"Guides ({len(guides)}):")
+    for g in guides:
+        print(f"  {truncate(g.address)}  {g.display_name}  profile={truncate(g.profile_hash, 10, 6)}")
+
+
+# ---------------------------------------------------------------------------
+# CLI: register-guide
+# ---------------------------------------------------------------------------
+
+
+def cmd_register_guide(state: AppState, args: argparse.Namespace) -> None:
+    address = getattr(args, "address", None)
+    display_name = getattr(args, "name", "")
+    if not address:
+        print("Error: --address required")
+        return
+    if get_guide(state, address):
+        print("Error: guide already registered")
+        return
+    profile_hash = bytes32_style(address + display_name + str(state.current_block))
+    state.guides.append(
+        Guide(
+            address=address,
+            profile_hash=profile_hash,
+            display_name=display_name or truncate(address),
+            listed=True,
+        )
+    )
+    state.current_block += 1
+    print(f"Registered guide: {truncate(address)} ({display_name or 'no name'})")
+
+
+# ---------------------------------------------------------------------------
+# CLI: send-tip (simulated)
